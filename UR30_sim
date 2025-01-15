@@ -1,0 +1,100 @@
+%% UR30 Robot Simulation for Pick and Place Task
+% This script performs trajectory generation, modeling, and control of a 
+% UR30 manipulator robot for a simple pick and place task. The results are visualized.
+
+%% Initialization and Parameters
+link_lengths = [0.425, 0.392, 0.109, 0.09475, 0.0825, 0.0825];
+joint_limits = [-2*pi, 2*pi; -2*pi, 2*pi; -2*pi, 2*pi; -2*pi, 2*pi; -2*pi, 2*pi; -2*pi, 2*pi];
+ts = 0.01;
+simulation_time = 10;
+pick_position = [0.3, 0.2, 0.1];
+place_position = [0.5, -0.3, 0.2];
+
+%% Trajectory Generation
+n = length(0:ts:simulation_time);
+time_vector = linspace(0, simulation_time, n);
+coeff_x = polyfit([0, simulation_time], [pick_position(1), place_position(1)], 5);
+coeff_y = polyfit([0, simulation_time], [pick_position(2), place_position(2)], 5);
+coeff_z = polyfit([0, simulation_time], [pick_position(3), place_position(3)], 5);
+trajectory_x = polyval(coeff_x, time_vector);
+trajectory_y = polyval(coeff_y, time_vector);
+trajectory_z = polyval(coeff_z, time_vector);
+trajectory = [trajectory_x; trajectory_y; trajectory_z];
+
+
+
+%% Control System
+kp = .1*[10, 10, 10, 10, 10, 10];
+kd = 0*[1, 1, 1, 1, 1, 1];
+ki = 0*[0.1, 0.1, 0.1, 0.1, 0.1, 0.1];
+joint_angles = zeros(6, n);
+joint_angles(:, 1) = [0.1; 0.1; 0; 0; 0; 0];
+joint_velocities = zeros(6, n);
+error_integral = zeros(6, 1);
+
+for i = 2:n
+    desired_position = trajectory(:, i);
+    desired_angles = inverse_kinematics(desired_position, link_lengths);
+    error = desired_angles - joint_angles(:, i-1);
+    error_integral = error_integral + error * ts;
+    if i > 2
+        error_derivative = (error - (desired_angles - joint_angles(:, i-2))) / ts;
+    else
+        error_derivative = zeros(6, 1);
+    end
+    control_input = kp' .* error + ki' .* error_integral + kd' .* error_derivative;
+    joint_velocities(:, i) = control_input;
+    joint_angles(:, i) = joint_angles(:, i-1) + joint_velocities(:, i) * ts;
+end
+
+
+
+
+%% Visualization
+% Plot trajectories
+figure;
+plot3(trajectory(1, :), trajectory(2, :), trajectory(3, :), 'r-', 'LineWidth', 2);
+hold on;
+plot3(pick_position(1), pick_position(2), pick_position(3), 'go', 'MarkerSize', 10);
+plot3(place_position(1), place_position(2), place_position(3), 'bo', 'MarkerSize', 10);
+title('Trajectory of the End-Effector');
+xlabel('X (m)'); ylabel('Y (m)'); zlabel('Z (m)');
+grid on; view(3);
+hold off;
+
+% Plot joint angles
+figure;
+plot(time_vector, joint_angles);
+title('Joint Angles Over Time');
+xlabel('Time (s)'); ylabel('Joint Angles (rad)');
+legend('Joint 1', 'Joint 2', 'Joint 3', 'Joint 4', 'Joint 5', 'Joint 6');
+grid on;
+
+% Plot joint velocities
+figure;
+plot(time_vector, joint_velocities);
+title('Joint Velocities Over Time');
+xlabel('Time (s)'); ylabel('Joint Velocities (rad/s)');
+legend('Joint 1', 'Joint 2', 'Joint 3', 'Joint 4', 'Joint 5', 'Joint 6');
+grid on;
+
+
+%% Modeling the Manipulator
+% Forward kinematics function
+function pos = forward_kinematics(joint_angles, link_lengths)
+    % Simplified forward kinematics for UR30 (6-DOF example)
+    % Add actual forward kinematics for UR30 based on DH parameters
+    x = sum(link_lengths .* cos(cumsum(joint_angles(1:6))));
+    y = sum(link_lengths .* sin(cumsum(joint_angles(1:6))));
+    z = link_lengths(4) + link_lengths(5) + link_lengths(6); % Assumes constant z offset for simplicity
+    pos = [x; y; z];
+end
+
+% Inverse kinematics function (simplified example)
+function joint_angles = inverse_kinematics(target_position, link_lengths)
+    % Simplistic inverse kinematics for UR30 (6-DOF)
+    % Placeholder for actual implementation
+    joint_angles = zeros(6, 1); % Replace with actual IK solver for UR30
+end
+
+%% End of Script
